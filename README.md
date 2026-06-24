@@ -20,6 +20,38 @@ RADIO HOST (your machine, runs minerva-radio.sh)          VPS (public, https)
 `radio.html` is **self-contained** (no engines — it just plays the stream). Edit the `CONFIG`
 block at the top only if you are NOT using the same-origin nginx setup below.
 
+## Run the web host with Docker (easiest to share)
+
+One image runs the whole listener side — **Icecast + metadata bridge + nginx serving `radio.html`**:
+
+```bash
+docker compose up --build
+# or:  docker build -t minerva-fm-radio . && \
+#      docker run -p 8080:8080 -p 8000:8000 minerva-fm-radio
+```
+
+- **Listeners:** http://localhost:8080/  (replace localhost with the host's address to share)
+- **Ports:** `8080` = web + metadata POST · `8000` = Icecast source-push
+- **Secrets:** set `ICECAST_SOURCE_PASS`, `ICECAST_ADMIN_PASS`, `BRIDGE_TOKEN` (see `docker-compose.yml`)
+
+Feed it audio from your radio host (where `minerva-radio.sh` + the `vgm_radio` sink live):
+
+```bash
+ICECAST_HOST=<docker-host> ICECAST_PORT=8000 ICECAST_SOURCE_PASS=hackme ./server/stream.sh
+export BRIDGE_URL=http://<docker-host>:8080/meta/update BRIDGE_TOKEN=changeme   # for publish.sh
+```
+
+No music handy? Verify the pipeline with a **test tone**:
+
+```bash
+ffmpeg -re -f lavfi -i "sine=frequency=440:sample_rate=44100" -ac 2 \
+  -c:a libmp3lame -b:a 128k -f mp3 -content_type audio/mpeg \
+  icecast://source:hackme@<docker-host>:8000/stream
+```
+
+This container is plain HTTP (great for a quick share / LAN / behind another proxy). For a public
+TLS deployment, use the `server/nginx.conf` + certbot path below instead.
+
 ## VPS setup
 
 ```bash

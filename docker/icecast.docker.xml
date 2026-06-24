@@ -1,0 +1,47 @@
+<icecast>
+    <!-- Container Icecast. Passwords are injected from env by entrypoint.sh. -->
+    <location>Earth</location>
+    <admin>admin@localhost</admin>
+
+    <limits>
+        <clients>1000</clients>
+        <sources>2</sources>
+        <queue-size>524288</queue-size>
+        <client-timeout>30</client-timeout>
+        <header-timeout>15</header-timeout>
+        <source-timeout>10</source-timeout>
+        <burst-on-connect>1</burst-on-connect>
+        <burst-size>65536</burst-size>
+    </limits>
+
+    <authentication>
+        <source-password>__SOURCE_PASS__</source-password>
+        <relay-password>__SOURCE_PASS__</relay-password>
+        <admin-user>admin</admin-user>
+        <admin-password>__ADMIN_PASS__</admin-password>
+    </authentication>
+
+    <hostname>localhost</hostname>
+    <listen-socket><port>8000</port></listen-socket>
+
+    <http-headers>
+        <header name="Access-Control-Allow-Origin" value="*" />
+    </http-headers>
+
+    <mount type="normal">
+        <mount-name>/stream</mount-name>
+        <max-listeners>1000</max-listeners>
+        <public>0</public>
+    </mount>
+
+    <fileserve>0</fileserve>
+    <paths>
+        <logdir>/var/log/icecast2</logdir>
+        <webroot>/usr/share/icecast2/web</webroot>
+        <adminroot>/usr/share/icecast2/admin</adminroot>
+    </paths>
+    <logging>
+        <loglevel>3</loglevel>
+        <logfile>-</logfile>
+    </logging>
+</icecast>

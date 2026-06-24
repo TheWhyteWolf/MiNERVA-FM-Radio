@@ -1,0 +1,13 @@
+services:
+  minerva-fm:
+    build: .
+    image: minerva-fm-radio:latest
+    container_name: minerva-fm
+    ports:
+      - "8080:8080"   # listeners (web) + metadata POST (/meta/update)
+      - "8000:8000"   # Icecast source-push port (for ffmpeg / server/stream.sh)
+    environment:
+      ICECAST_SOURCE_PASS: "hackme"   # CHANGE THESE before sharing publicly
+      ICECAST_ADMIN_PASS: "hackme"
+      BRIDGE_TOKEN: "changeme"
+    restart: unless-stopped
