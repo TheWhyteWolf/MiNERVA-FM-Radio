@@ -1,3 +1,20 @@
+# 🔒⚠️ CHANGE THE DEFAULT PASSWORDS BEFORE EXPOSING THIS ⚠️🔒
+
+> [!CAUTION]
+> This project ships with **insecure placeholder credentials** so it runs out of the box:
+> `ICECAST_SOURCE_PASS=hackme` · `ICECAST_ADMIN_PASS=hackme` · `BRIDGE_TOKEN=changeme`.
+>
+> Anyone who can reach them can **hijack your stream, log into the Icecast _admin_ panel, or
+> spoof the now-playing feed.** Before **any** internet-facing deployment:
+>
+> - 🔑 **Set strong, unique values for all three** (via env vars / `docker-compose.yml`).
+> - 🚫 **Never expose Icecast's port `8000` to the public.** Firewall it to your audio-source host
+>   (or tunnel it over SSH/Tailscale). Listeners only ever need the web port (`8080`, or `443` with TLS).
+> - 👑 The Icecast admin login is `admin` / `ICECAST_ADMIN_PASS` — **treat it like a root password.**
+> - 🌐 For a public site, terminate **HTTPS** (the `server/nginx.conf` + certbot path), don't serve admin over plain HTTP.
+
+---
+
 # MiNERVA-FM — Radio (broadcast edition)
 
 One shared live stream to many listeners, with the CRT visualiser front-end. Same look as the
@@ -25,6 +42,11 @@ block at the top only if you are NOT using the same-origin nginx setup below.
 One image runs the whole listener side — **Icecast + metadata bridge + nginx serving `radio.html`**:
 
 ```bash
+# Prebuilt image from GitHub Container Registry (once the workflow has published it
+# and the package is set to public):
+docker run -p 8080:8080 -p 8000:8000 ghcr.io/thewhytewolf/minerva-fm-radio
+
+# …or build it locally:
 docker compose up --build
 # or:  docker build -t minerva-fm-radio . && \
 #      docker run -p 8080:8080 -p 8000:8000 minerva-fm-radio
