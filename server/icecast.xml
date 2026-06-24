@@ -1,0 +1,50 @@
+<icecast>
+    <!-- MiNERVA-FM Icecast config (template). Replace every CHANGE_ME_*. Runs on the VPS. -->
+    <location>Earth</location>
+    <admin>admin@example.com</admin>
+
+    <limits>
+        <clients>1000</clients>
+        <sources>2</sources>
+        <queue-size>524288</queue-size>
+        <client-timeout>30</client-timeout>
+        <header-timeout>15</header-timeout>
+        <source-timeout>10</source-timeout>
+        <burst-on-connect>1</burst-on-connect>
+        <burst-size>65536</burst-size>
+    </limits>
+
+    <authentication>
+        <source-password>CHANGE_ME_SOURCE</source-password>   <!-- = ICECAST_SOURCE_PASS on the radio host -->
+        <relay-password>CHANGE_ME_RELAY</relay-password>
+        <admin-user>admin</admin-user>
+        <admin-password>CHANGE_ME_ADMIN</admin-password>
+    </authentication>
+
+    <hostname>radio.example.com</hostname>
+
+    <!-- Listeners reach the stream via nginx (https /stream → 127.0.0.1:8000).
+         Port 8000 only needs to accept the source push from the radio host —
+         firewall it to that IP, or tunnel the source over SSH/Tailscale. -->
+    <listen-socket><port>8000</port></listen-socket>
+
+    <!-- Allow the browser AnalyserNode to read the stream cross-origin if you ever
+         serve radio.html from a different origin (e.g. GitHub Pages). -->
+    <http-headers>
+        <header name="Access-Control-Allow-Origin" value="*" />
+    </http-headers>
+
+    <mount type="normal">
+        <mount-name>/stream</mount-name>
+        <max-listeners>1000</max-listeners>
+        <public>0</public>
+    </mount>
+
+    <fileserve>0</fileserve>
+    <paths>
+        <logdir>/var/log/icecast2</logdir>
+        <webroot>/usr/share/icecast2/web</webroot>
+        <adminroot>/usr/share/icecast2/admin</adminroot>
+    </paths>
+    <logging><loglevel>3</loglevel></logging>
+</icecast>

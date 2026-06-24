@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>MiNERVA-FM — Radio</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%; background: #000; overflow: hidden;
+    font-family: "DejaVu Sans Mono", "Liberation Mono", Menlo, Consolas, monospace;
+    cursor: default;
+  }
+  #stage {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    background: radial-gradient(ellipse at center, #0a0d0a 0%, #000 70%);
+  }
+  #set {
+    position: relative; width: min(96vw, 127vh); aspect-ratio: 4 / 3;
+    border-radius: 3.2% / 4.3%;
+    background: linear-gradient(155deg, #2a2620, #100e0b 60%, #050403);
+    padding: 2.6%;
+    box-shadow:
+      inset 0 0 4px 2px rgba(255,255,255,.06),
+      inset 0 0 40px 10px rgba(0,0,0,.85),
+      0 30px 80px -20px rgba(0,0,0,.9),
+      0 0 120px -10px rgba(120,180,90,.12);
+  }
+  #crt {
+    display: block; width: 100%; height: 100%;
+    border-radius: 2% / 2.6%; background: #000;
+    image-rendering: pixelated; image-rendering: optimizeSpeed;
+  }
+  #set::after {
+    content: ""; position: absolute; inset: 2.6%;
+    border-radius: 2% / 2.6%; pointer-events: none;
+    background: linear-gradient(150deg, rgba(255,255,255,.07), rgba(255,255,255,0) 22%, rgba(255,255,255,0) 78%, rgba(255,255,255,.03));
+    mix-blend-mode: screen;
+  }
+  #power {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    color: #6f8f5a; letter-spacing: .25em; text-align: center;
+    background: #000; border-radius: 2% / 2.6%;
+    cursor: pointer; z-index: 5; user-select: none;
+  }
+  #power .blink { animation: blink 1.2s steps(2,end) infinite; }
+  @keyframes blink { 50% { opacity: .15; } }
+  #power small { display:block; margin-top: 1.2em; font-size: .62em; color:#4f6a40; letter-spacing:.18em; }
+  #hint {
+    position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%);
+    color: #3c5430; font-size: 11px; letter-spacing: .15em; z-index: 6;
+    opacity: .6; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="set">
+      <canvas id="crt" width="1280" height="960"></canvas>
+      <div id="power">
+        <div>
+          <div class="blink">▶ TUNE IN</div>
+          <small>MiNERVA-FM &nbsp;·&nbsp; click to listen live</small>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="hint">[M]ono [S]canlines &nbsp;·&nbsp; [&#8593;/&#8595;] volume &nbsp;·&nbsp; live broadcast</div>
+
+  <!-- the live stream element; routed through Web Audio for the visualiser -->
+  <audio id="stream" preload="none" crossorigin="anonymous"></audio>
+
+<script>
+"use strict";
+/* ============================================================================
+   MiNERVA-FM — Radio (listener edition)
+   Same CRT shell as the Local Player, but the audio source is ONE shared live
+   stream (Icecast) and the now-playing comes over SSE — so every viewer hears
+   and sees the same broadcast.
+   ========================================================================== */
+
+const STATION = "MiNERVA-FM";
+const CONFIG = {
+  // Same-origin deploy (recommended): nginx serves this page and reverse-proxies
+  // the Icecast mount at /stream and the SSE metadata feed at /events.
+  // For a cross-origin deploy (e.g. page on GitHub Pages), set absolute URLs here
+  // and make sure Icecast/SSE send Access-Control-Allow-Origin + are served over https.
+  streamUrl: "/stream",      // Icecast mount — MP3 recommended (broadest browser support)
+  metaUrl:   "/events",      // Server-Sent Events: now-playing JSON
+};
+
+const DEBUG = false;
+
+/* ---- ticker messages (from the radio's ticker.sh) ----------------------- */
+const TICKER_MESSAGES = [
+  "[ WELCOME TO MiNERVA RADIO] Retro game music from across the ages",
+  "Birds aren't real. Seriously though. Have you ever seen a baby pigeon? I think not! They're spying on you. Just you",
+  "I'm ashamed of what I did for a klondike bar... ",
+  "[ MiNERVA RADIO ] Streaming SID, SPC, VGM, MOD and more",
+  "PUBLIC ANNOUNCEMENT: Seeding is sharing and sharing is caring",
+  "BE PATIENT! Viewers found using antipatience language will be scoffed at",
+  "When was the last time you told your mother you loved her?",
+  "Help! I'm trapped in a radio!",
+  "[MiNERVA RADIO] song requests in general chat! Anything that get's 25+ hearts will be considered. SNES and older only!",
+  "Anyway, back to the bird thing. I reckon they're charging by standing on the power lines, that's why they never get fried.",
+  "To download is human, to share is DiVINE",
+  "If we're not meant to have midnight snacks, why is there a light in the fridge?",
+  "Your numbers this week are 05-17-27-29-35 / 07",
+];
+
+/* ---- vis colour schemes (gradients) + characters ------------------------ */
+const VIS_SCHEMES = {
+  gameboy:        ["#0f380f", "#306230", "#8bac0f", "#9bbc0f"],
+  gameboy_pocket: ["#2b2b22", "#4d533c", "#8b956d", "#c4cfa1"],
+  bbc_micro:      ["#0000ff", "#00ff00", "#ffff00", "#ff0000", "#ffffff"],
+  pico8:          ["#1d2b53", "#7e2553", "#ff004d", "#ffa300", "#fff1e8"],
+  cga:            ["#000000", "#55ffff", "#ff55ff", "#ffffff"],
+  nes:            ["#0000fc", "#0078f8", "#00b800", "#f8b800", "#f83800", "#fcfcfc"],
+  minerva:        ["#2a0a00", "#7a2a00", "#ff7a00", "#ffc24d", "#fff3c0"],
+  c64:            ["#352879", "#6c5eb5", "#6abfc6", "#b8c76f", "#ffffff"],
+  zx_spectrum:    ["#0000d7", "#d70000", "#d700d7", "#00d700", "#d7d700", "#ffffff"],
+};
+const SCHEME_NAMES = Object.keys(VIS_SCHEMES);
+const VIS_CHARS = ["#","|",":","+","*","=","!",">","%","@","^","~","-","o","x"];
+
+const ANSI = {
+  blue:"#5b9bff", yellow:"#ffd633", green:"#54ff7a", magenta:"#ff7bd6",
+  red:"#ff5a5a", cyan:"#5cf7ff", fg:"#cfe8cf", dim:"#5f7a52",
+};
+
+const CRT = {
+  curvature: 0.10, scanline: 0.30, mask: 0.22, rgbShift: 0.0011, bloom: 0.55,
+  flicker: 0.05, noise: 0.07, glowLine: 0.04, vignette: 0.32, brightness: 1.18,
+  mono: false, monoTint: [1.0, 0.55, 0.12], power: 0,
+};
+
+/* ============================================================================
+   CONTENT CANVAS — three panes at a low virtual resolution
+   ========================================================================== */
+const VW = 640, VH = 480;
+const content = document.createElement("canvas");
+content.width = VW; content.height = VH;
+const cx = content.getContext("2d", { alpha: false });
+
+const CELL_W = 8, CELL_H = 12;
+const COLS = Math.floor(VW / CELL_W);
+const FONT = '12px "DejaVu Sans Mono", "Liberation Mono", monospace';
+const PANE_TOP_ROWS = 12, PANE_TICKER_ROWS = 1;
+const VIS_TOP = PANE_TOP_ROWS * CELL_H;
+const VIS_BOTTOM = VH - PANE_TICKER_ROWS * CELL_H;
+
+function drawNowPlaying(state) {
+  cx.font = FONT; cx.textBaseline = "alphabetic";
+  cx.fillStyle = ANSI.blue;   cx.fillText("[ NOW PLAYING ]", 0, CELL_H - 2);
+  cx.fillStyle = ANSI.yellow; cx.fillText("[" + state.source + "]", 16 * CELL_W, CELL_H - 2);
+  let row = 2;
+  const line = (label, value, lc) => {
+    cx.fillStyle = lc || ANSI.green; cx.fillText(label, 0, row * CELL_H + CELL_H - 2);
+    cx.fillStyle = ANSI.fg; cx.fillText(value, (label.length + 1) * CELL_W, row * CELL_H + CELL_H - 2);
+    row++;
+  };
+  line("Station:", STATION);
+  if (state.platform) line("System:", state.platform);
+  line("Game:", clip(state.game, COLS - 8));
+  line("Track:", clip(state.track, COLS - 8));
+  line("Colour:", state.scheme);
+  if (state.listeners > 0) line("Listeners:", String(state.listeners), ANSI.magenta);
+  cx.fillStyle = ANSI.dim;
+  cx.fillText("-".repeat(COLS), 0, (PANE_TOP_ROWS - 1) * CELL_H + CELL_H - 2);
+}
+function clip(s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+
+const SPEC_COLS = 56;
+function drawVisualiser(freq, scheme, ch) {
+  const pal = VIS_SCHEMES[scheme] || VIS_SCHEMES.minerva;
+  const areaH = VIS_BOTTOM - VIS_TOP;
+  const rows = Math.floor(areaH / CELL_H);
+  const colW = VW / SPEC_COLS;
+  cx.font = FONT;
+  const bins = freq.length;
+  for (let c = 0; c < SPEC_COLS; c++) {
+    const t = c / SPEC_COLS;
+    const bin = Math.min(bins - 1, Math.floor(Math.pow(t, 1.7) * bins));
+    let v = freq[bin] / 255; v = Math.pow(v, 0.85);
+    const h = Math.max(0, Math.round(v * rows));
+    const x = Math.round(c * colW + colW / 2 - CELL_W / 2);
+    for (let r = 0; r < h; r++) {
+      const frac = r / Math.max(1, rows - 1);
+      cx.fillStyle = pal[Math.min(pal.length - 1, Math.floor(frac * pal.length))];
+      cx.fillText(ch, x, VIS_BOTTOM - r * CELL_H - 2);
+    }
+  }
+}
+
+const ticker = {
+  msg:"", colour:ANSI.yellow, offset:0, full:"", msgLen:0, nextAt:0, stepAt:0,
+  colours:[ANSI.yellow, ANSI.green, ANSI.cyan, ANSI.magenta, ANSI.red],
+  reroll(now){
+    this.msg = TICKER_MESSAGES[(Math.random()*TICKER_MESSAGES.length)|0];
+    this.colour = this.colours[(Math.random()*this.colours.length)|0];
+    const base = this.msg + "    *** ";
+    this.msgLen = base.length; this.full = base.repeat(30);
+    this.offset = 0; this.nextAt = now + 60000;
+  },
+  update(now){ if(now>=this.nextAt) this.reroll(now); if(now>=this.stepAt){ this.offset=(this.offset+1)%this.msgLen; this.stepAt=now+120; } },
+  draw(){ cx.font=FONT; cx.fillStyle=this.colour; cx.fillText(this.full.substr(this.offset, COLS), 0, VH-2); },
+};
+
+/* ============================================================================
+   WEBGL CRT POST-PROCESS  (single pass; 2D blit fallback)
+   ========================================================================== */
+const out = document.getElementById("crt");
+let glOK = false, gl, prog, locs, tex, quadBuf;
+
+const VERT = `attribute vec2 p; varying vec2 vUv;
+void main(){ vUv = vec2(p.x*0.5+0.5, 0.5-p.y*0.5); gl_Position = vec4(p,0.0,1.0); }`;
+
+const FRAG = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uTex;
+uniform vec2  uRes;
+uniform float uTime;
+uniform float uCurv, uScan, uMask, uRgb, uBloom, uFlicker, uNoise, uGlow, uVig, uBright, uMono;
+uniform vec3  uTint;
+uniform float uPower;
+
+float rand(vec2 c){ return fract(sin(dot(c, vec2(12.9898,78.233)))*43758.5453); }
+vec2 curve(vec2 uv){ uv = uv*2.0 - 1.0; vec2 o = abs(uv.yx) * (0.45*uCurv); uv = uv + uv*o*o; return uv*0.5 + 0.5; }
+
+void main(){
+  vec2 uv = curve(vUv);
+  if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){ gl_FragColor=vec4(0.0,0.0,0.0,1.0); return; }
+  vec3 col;
+  col.r = texture2D(uTex, vec2(uv.x + uRgb, uv.y)).r;
+  col.g = texture2D(uTex, uv).g;
+  col.b = texture2D(uTex, vec2(uv.x - uRgb, uv.y)).b;
+  vec3 bloom = vec3(0.0); float bs = 1.6/uRes.x;
+  bloom += texture2D(uTex, uv + vec2( bs, 0)).rgb;
+  bloom += texture2D(uTex, uv + vec2(-bs, 0)).rgb;
+  bloom += texture2D(uTex, uv + vec2(0,  bs*1.3)).rgb;
+  bloom += texture2D(uTex, uv + vec2(0, -bs*1.3)).rgb;
+  bloom += texture2D(uTex, uv + vec2( bs, bs)).rgb;
+  bloom += texture2D(uTex, uv + vec2(-bs,-bs)).rgb;
+  bloom += texture2D(uTex, uv + vec2( bs*2.0, 0)).rgb;
+  bloom += texture2D(uTex, uv + vec2(-bs*2.0, 0)).rgb;
+  bloom *= 0.125; col += bloom*bloom * uBloom;
+  if(uMono > 0.5){ float lum = dot(col, vec3(0.299,0.587,0.114)); col = uTint * lum; }
+  float sl = sin(uv.y * uRes.y * 3.14159265);
+  col *= 1.0 - uScan*(0.5 + 0.5*sl)*0.6;
+  float m = mod(gl_FragCoord.x, 3.0);
+  vec3 mask = vec3(1.0 - uMask);
+  if(m < 1.0) mask.r = 1.0; else if(m < 2.0) mask.g = 1.0; else mask.b = 1.0;
+  col *= mask;
+  float band = fract(uv.y*0.7 - uTime*0.08);
+  col += uGlow * smoothstep(0.96, 1.0, band) * vec3(0.6,0.8,0.6);
+  col *= 1.0 - uFlicker*(rand(vec2(uTime,1.0))-0.5);
+  col += (rand(uv*uRes + uTime) - 0.5) * uNoise;
+  vec2 vc = uv - 0.5; col *= 1.0 - uVig*dot(vc,vc)*2.2;
+  col *= uBright;
+  if(uPower < 1.0){
+    vec2 pp = uv*2.0 - 1.0;
+    float ox = smoothstep(0.0, 0.40, uPower);
+    float oy = smoothstep(0.42, 1.0, uPower);
+    float effOy = max(oy, 0.0045);
+    float mx = 1.0 - smoothstep(ox,    ox + 0.012,    abs(pp.x));
+    float my = 1.0 - smoothstep(effOy, effOy + 0.010, abs(pp.y));
+    float lit = mx * my;
+    float hot = 1.0 - smoothstep(0.0, 0.55, oy);
+    vec3 beam = mix(col, vec3(1.15), hot * 0.9);
+    col = beam * lit;
+    col += lit * smoothstep(effOy, effOy * 0.25, abs(pp.y)) * hot * vec3(0.45, 0.6, 0.45);
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+function compile(type, src){
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function initGL(){
+  gl = out.getContext("webgl", { antialias:false }) || out.getContext("experimental-webgl");
+  if(!gl) return false;
+  prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  quadBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const p = gl.getAttribLocation(prog, "p");
+  gl.enableVertexAttribArray(p); gl.vertexAttribPointer(p, 2, gl.FLOAT, false, 0, 0);
+  tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  locs = {};
+  ["uTex","uRes","uTime","uCurv","uScan","uMask","uRgb","uBloom","uFlicker","uNoise","uGlow","uVig","uBright","uMono","uTint","uPower"]
+    .forEach(n => locs[n] = gl.getUniformLocation(prog, n));
+  return true;
+}
+function drawGL(time){
+  gl.viewport(0,0,out.width,out.height);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, content);
+  gl.uniform1i(locs.uTex, 0);
+  gl.uniform2f(locs.uRes, VW, VH);
+  gl.uniform1f(locs.uTime, time/1000);
+  gl.uniform1f(locs.uCurv, CRT.curvature); gl.uniform1f(locs.uScan, CRT.scanline);
+  gl.uniform1f(locs.uMask, CRT.mask);      gl.uniform1f(locs.uRgb, CRT.rgbShift);
+  gl.uniform1f(locs.uBloom, CRT.bloom);    gl.uniform1f(locs.uFlicker, CRT.flicker);
+  gl.uniform1f(locs.uNoise, CRT.noise);    gl.uniform1f(locs.uGlow, CRT.glowLine);
+  gl.uniform1f(locs.uVig, CRT.vignette);   gl.uniform1f(locs.uBright, CRT.brightness);
+  gl.uniform1f(locs.uMono, CRT.mono ? 1.0 : 0.0);
+  gl.uniform3fv(locs.uTint, CRT.monoTint);
+  gl.uniform1f(locs.uPower, CRT.power);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+function drawFallback(){ const g = out.getContext("2d"); if(!g) return; g.imageSmoothingEnabled=false; g.drawImage(content,0,0,out.width,out.height); }
+
+/* ============================================================================
+   AUDIO — the live stream → analyser (everyone hears the same broadcast)
+   ========================================================================== */
+let actx, analyser, freqData, masterGain, srcNode, audioEl;
+let volume = 0.7, retryTimer = null;
+
+function initAudio(){
+  audioEl = document.getElementById("stream");
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = actx.createAnalyser();
+  analyser.fftSize = 512; analyser.smoothingTimeConstant = 0.78;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+  masterGain = actx.createGain(); masterGain.gain.value = volume;
+  srcNode = actx.createMediaElementSource(audioEl);
+  srcNode.connect(analyser); analyser.connect(masterGain); masterGain.connect(actx.destination);
+  ["error","stalled","ended"].forEach(ev => audioEl.addEventListener(ev, scheduleRetry));
+  audioEl.addEventListener("playing", () => { state.track = state.track === "tuning in…" ? "live" : state.track; });
+}
+function tuneIn(){
+  // cache-bust so a reconnect actually re-opens the stream
+  audioEl.src = CONFIG.streamUrl + (CONFIG.streamUrl.includes("?") ? "&" : "?") + "_=" + Date.now();
+  audioEl.play().catch(err => { if(DEBUG) console.warn("play() blocked/failed:", err); });
+}
+function scheduleRetry(){
+  if(retryTimer) return;
+  if(DEBUG) console.warn("stream dropped — reconnecting in 2s");
+  state.track = "reconnecting…";
+  retryTimer = setTimeout(() => { retryTimer = null; tuneIn(); }, 2000);
+}
+
+/* ============================================================================
+   METADATA — Server-Sent Events: now-playing + palette, in sync with the air
+   ========================================================================== */
+function connectMeta(){
+  if(typeof EventSource === "undefined"){ if(DEBUG) console.warn("no EventSource"); return; }
+  const es = new EventSource(CONFIG.metaUrl);
+  es.onmessage = (ev) => { try { applyMeta(JSON.parse(ev.data)); } catch(e){ if(DEBUG) console.warn("bad meta", e); } };
+  es.onerror = () => { /* EventSource reconnects on its own */ };
+}
+function applyMeta(m){
+  state.source = "ON AIR";
+  if(m.id != null) state.id = m.id;
+  state.platform = m.platform || m.system || state.platform;
+  if(m.game  != null) state.game  = String(m.game).replace(/_/g, " ");
+  if(m.track != null) state.track = m.track;
+  if(m.scheme && VIS_SCHEMES[m.scheme]) state.scheme = m.scheme;
+  if(m.char) state.char = m.char;
+  if(typeof m.listeners === "number") state.listeners = m.listeners;
+}
+
+/* ============================================================================
+   STATE + MAIN LOOP
+   ========================================================================== */
+let state = { source:"OFF AIR", id:"—", platform:"", game:"tuning in…", track:"tuning in…",
+              scheme:"minerva", char:"#", listeners:0 };
+function rollLook(){
+  state.scheme = SCHEME_NAMES[(Math.random()*SCHEME_NAMES.length)|0];
+  state.char   = VIS_CHARS[(Math.random()*VIS_CHARS.length)|0];
+}
+
+let powerStart = -1, lastDiag = 0;
+const POWER_MS = 666;
+function frame(time){
+  if(powerStart >= 0 && CRT.power < 1){ const T = (time - powerStart)/POWER_MS; CRT.power = T>=1?1:T; }
+
+  let realAvg = -1;
+  if(analyser){
+    analyser.getByteFrequencyData(freqData);
+    realAvg = 0; for(let i=0;i<freqData.length;i++) realAvg += freqData[i]; realAvg /= freqData.length;
+  } else { freqData = freqData || new Uint8Array(256); }
+  if(realAvg <= 0){
+    for(let i=0;i<freqData.length;i++)
+      freqData[i] = 40 + 30*Math.abs(Math.sin(i*0.15 + time*0.002)) * Math.max(0, 1 - i/freqData.length);
+  }
+  if(DEBUG && analyser && time - lastDiag > 2000){ lastDiag = time; console.log("audio:", realAvg>0?("LIVE avg="+realAvg.toFixed(1)):"silent"); }
+
+  ticker.update(time);
+  cx.fillStyle = "#000"; cx.fillRect(0,0,VW,VH);
+  drawNowPlaying(state);
+  drawVisualiser(freqData, state.scheme, state.char);
+  ticker.draw();
+  if(glOK) drawGL(time); else drawFallback();
+  requestAnimationFrame(frame);
+}
+
+/* ============================================================================
+   BOOT
+   ========================================================================== */
+function boot(){
+  try { glOK = initGL(); } catch(e){ console.warn("WebGL init failed, 2D fallback:", e); glOK = false; }
+  rollLook();
+  ticker.reroll(performance.now());
+  requestAnimationFrame(frame);
+
+  const power = document.getElementById("power");
+  power.addEventListener("click", async () => {
+    powerStart = performance.now();
+    power.remove();
+    initAudio();
+    await actx.resume();
+    state.source = "ON AIR"; state.track = "tuning in…";
+    tuneIn();
+    connectMeta();
+  }, { once:true });
+
+  addEventListener("keydown", (e) => {
+    if(e.key === "m" || e.key === "M") CRT.mono = !CRT.mono;
+    else if(e.key === "s" || e.key === "S") CRT.scanline = CRT.scanline > 0 ? 0 : 0.30;
+    else if(e.key === "ArrowUp"){ volume = Math.min(1, volume+0.05); if(masterGain) masterGain.gain.value = volume; }
+    else if(e.key === "ArrowDown"){ volume = Math.max(0, volume-0.05); if(masterGain) masterGain.gain.value = volume; }
+  });
+}
+boot();
+</script>
+</body>
+</html>
