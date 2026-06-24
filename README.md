@@ -7,11 +7,11 @@
 > Anyone who can reach them can **hijack your stream, log into the Icecast _admin_ panel, or
 > spoof the now-playing feed.** Before **any** internet-facing deployment:
 >
-> - 🔑 **Set strong, unique values for all three** (via env vars / `docker-compose.yml`).
-> - 🚫 **Never expose Icecast's port `8000` to the public.** Firewall it to your audio-source host
+>  **Set strong, unique values for all three** (via env vars / `docker-compose.yml`).
+>  **Never expose Icecast's port `8000` to the public.** Firewall it to your audio-source host
 >   (or tunnel it over SSH/Tailscale). Listeners only ever need the web port (`8080`, or `443` with TLS).
-> - 👑 The Icecast admin login is `admin` / `ICECAST_ADMIN_PASS` — **treat it like a root password.**
-> - 🌐 For a public site, terminate **HTTPS** (the `server/nginx.conf` + certbot path), don't serve admin over plain HTTP.
+>   The Icecast admin login is `admin` / `ICECAST_ADMIN_PASS` — **treat it like a root password.**
+>   For a public site, terminate **HTTPS** (the `server/nginx.conf` + certbot path), don't serve admin over plain HTTP.
 
 ---
 
