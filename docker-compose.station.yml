@@ -1,0 +1,23 @@
+services:
+  station:
+    build:
+      context: .
+      dockerfile: Dockerfile.station
+    image: minerva-fm-station:latest
+    container_name: minerva-fm-station
+    ports:
+      - "8080:8080"          # listeners open http://<host>:8080/
+    volumes:
+      - ./music:/music:ro       # <-- put your SID/SPC/VGM/VGZ/MP3 collection here
+      - minerva-catalogue:/data # persists the generated catalogue across restarts
+    environment:
+      ICECAST_SOURCE_PASS: "hackme"     # CHANGE before any public deployment
+      ICECAST_ADMIN_PASS: "hackme"
+      BRIDGE_TOKEN: "changeme"
+      STREAM_BITRATE: "128k"
+      # SID_DURATION: "180"   # seconds per SID (no HVSC songlengths in-container)
+      # MAX_TRACK: "300"      # hard cap per track (seconds)
+    restart: unless-stopped
+
+volumes:
+  minerva-catalogue:

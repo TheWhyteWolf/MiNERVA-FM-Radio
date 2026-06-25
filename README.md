@@ -37,6 +37,42 @@ RADIO HOST (your machine, runs minerva-radio.sh)          VPS (public, https)
 `radio.html` is **self-contained** (no engines — it just plays the stream). Edit the `CONFIG`
 block at the top only if you are NOT using the same-origin nginx setup below.
 
+## 🎛️ All-in-one station (radio + web host in one container)
+
+The simplest way to run the whole thing: mount a folder of your own music and it **indexes, plays,
+and broadcasts** — radio engine, Icecast, metadata bridge, and the CRT page, all in one image.
+Decoders are bundled (**ffmpeg+libgme** for VGM/VGZ/SPC/NSF, **sidplayfp** for SID), so there's no
+PulseAudio / players / desktop to set up.
+
+```bash
+# drop your SID/SPC/VGM/VGZ/MP3 collection in ./music, then:
+docker compose -f docker-compose.station.yml up --build
+```
+
+Open **http://localhost:8080/** and click TUNE IN.
+
+- Mount your music at `/music` (read-only is fine). Layout: `/<System>/<Game>/<files…>`.
+- The catalogue is generated on first run into the `/data` volume (persisted across restarts).
+- Env tunables: `ICECAST_SOURCE_PASS`, `ICECAST_ADMIN_PASS`, `BRIDGE_TOKEN`, `STREAM_BITRATE`,
+  `SID_DURATION`, `MAX_TRACK`. **Change the passwords before exposing it.**
+
+Plain `docker run`:
+```bash
+docker build -f Dockerfile.station -t minerva-fm-station .
+docker run -p 8080:8080 -v /path/to/music:/music:ro \
+  -e ICECAST_SOURCE_PASS=ChangeMe -e BRIDGE_TOKEN=ChangeMe minerva-fm-station
+```
+
+Hand it to someone as a single file (no repo, no build):
+```bash
+docker save minerva-fm-station | gzip > minerva-fm-station.tar.gz
+# they: docker load < minerva-fm-station.tar.gz
+#       docker run -p 8080:8080 -v /their/music:/music:ro minerva-fm-station
+```
+
+The section below is the **split** setup instead — web host only, fed by a separate radio source
+(e.g. your real `minerva-radio.sh` on another machine).
+
 ## Run the web host with Docker (easiest to share)
 
 One image runs the whole listener side — **Icecast + metadata bridge + nginx serving `radio.html`**:

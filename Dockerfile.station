@@ -1,0 +1,26 @@
+# MiNERVA-FM — all-in-one "station in a box".
+# Indexes a mounted music folder and broadcasts it (radio engine + Icecast +
+# metadata bridge + nginx serving the CRT page), no external audio source needed.
+# Decoders: ffmpeg+libgme (VGM/VGZ/SPC/NSF/...) + sidplayfp (SID).
+FROM node:20-bookworm-slim
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ffmpeg sidplayfp icecast2 nginx supervisor python3 curl ca-certificates procps \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -f /etc/nginx/sites-enabled/default
+
+COPY radio.html                 /var/www/minerva-fm/radio.html
+COPY server/metadata-bridge.mjs /app/metadata-bridge.mjs
+COPY minerva-indexer.sh         /app/minerva-indexer.sh
+COPY minerva-radio.sh           /app/minerva-radio.sh
+COPY station/station.sh         /app/station.sh
+COPY docker/icecast.docker.xml  /app/icecast.docker.xml
+COPY docker/nginx.docker.conf   /etc/nginx/conf.d/minerva.conf
+COPY station/supervisord.conf   /etc/supervisor/conf.d/minerva.conf
+COPY station/entrypoint.sh      /app/entrypoint.sh
+RUN chmod +x /app/station.sh /app/entrypoint.sh /app/minerva-indexer.sh
+
+VOLUME /music
+EXPOSE 8080
+ENTRYPOINT ["/app/entrypoint.sh"]
