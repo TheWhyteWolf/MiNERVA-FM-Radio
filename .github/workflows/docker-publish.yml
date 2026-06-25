@@ -1,4 +1,4 @@
-name: Publish Docker image
+name: Publish Docker images
 
 on:
   push:
@@ -6,15 +6,20 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch:
 
-env:
-  IMAGE: ghcr.io/thewhytewolf/minerva-fm-radio   # GHCR names must be lowercase
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dockerfile: Dockerfile               # web host only (BYO audio source)
+            image: ghcr.io/thewhytewolf/minerva-fm-radio
+          - dockerfile: Dockerfile.station       # all-in-one station (mount /music)
+            image: ghcr.io/thewhytewolf/minerva-fm-station
     steps:
       - uses: actions/checkout@v4
 
@@ -31,7 +36,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE }}
+          images: ${{ matrix.image }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
@@ -42,8 +47,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
