@@ -74,6 +74,9 @@ ffmpeg -re -f lavfi -i "sine=frequency=440:sample_rate=44100" -ac 2 \
 This container is plain HTTP (great for a quick share / LAN / behind another proxy). For a public
 TLS deployment, use the `server/nginx.conf` + certbot path below instead.
 
+Inside the container, **supervisord** runs Icecast + the metadata bridge + nginx and **auto-restarts
+any that crash**.
+
 ## VPS setup
 
 ```bash
