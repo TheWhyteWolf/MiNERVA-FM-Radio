@@ -70,6 +70,10 @@ docker save minerva-fm-station | gzip > minerva-fm-station.tar.gz
 #       docker run -p 8080:8080 -v /their/music:/music:ro minerva-fm-station
 ```
 
+**To hand someone a ready-to-run bundle** (prebuilt GHCR image, no repo, no build), use the
+[`deploy/`](deploy/) folder — see [`deploy/README.md`](deploy/README.md): `cp .env.example .env`,
+drop music in `deploy/music/`, `docker compose up -d`.
+
 The section below is the **split** setup instead — web host only, fed by a separate radio source
 (e.g. your real `minerva-radio.sh` on another machine).
 

@@ -1,0 +1,26 @@
+# MiNERVA-FM — one-command deploy of the all-in-one station.
+# Pulls the prebuilt image; no repo or build needed. Configure via .env.
+#
+#   1. cp .env.example .env   (then set strong passwords)
+#   2. put your music in ./music   (layout: <System>/<Game>/<files>)
+#   3. docker compose up -d   ->   http://localhost:8080/
+services:
+  station:
+    image: ghcr.io/thewhytewolf/minerva-fm-station:latest
+    container_name: minerva-fm-station
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    volumes:
+      - ./music:/music:ro        # your collection (read-only)
+      - catalogue:/data          # generated catalogue (persists)
+    environment:
+      ICECAST_SOURCE_PASS: "${ICECAST_SOURCE_PASS:?set ICECAST_SOURCE_PASS in .env}"
+      ICECAST_ADMIN_PASS:  "${ICECAST_ADMIN_PASS:?set ICECAST_ADMIN_PASS in .env}"
+      BRIDGE_TOKEN:        "${BRIDGE_TOKEN:?set BRIDGE_TOKEN in .env}"
+      STREAM_BITRATE:      "${STREAM_BITRATE:-128k}"
+      SID_DURATION:        "${SID_DURATION:-180}"
+      MAX_TRACK:           "${MAX_TRACK:-300}"
+    restart: unless-stopped
+
+volumes:
+  catalogue:

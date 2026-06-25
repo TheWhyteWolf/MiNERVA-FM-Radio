@@ -1,0 +1,4 @@
+# keep secrets and music out of git
+.env
+music/*
+!music/.gitkeep
