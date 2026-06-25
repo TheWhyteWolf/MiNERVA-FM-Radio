@@ -4,6 +4,12 @@ on:
   push:
     branches: [ main ]
     tags: [ 'v*' ]
+    paths-ignore:
+      - '**.md'
+      - 'deploy/**'
+      - 'docker-compose*.yml'
+      - 'music/**'
+      - '.gitignore'
   workflow_dispatch:
 
 jobs:

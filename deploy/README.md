@@ -18,7 +18,7 @@ The image is pulled from `ghcr.io/thewhytewolf/minerva-fm-station`. If it's **pr
 recipient needs one of:
 - `docker login ghcr.io` with a PAT that has `read:packages`, **or**
 - a tarball you hand them: `docker save ghcr.io/thewhytewolf/minerva-fm-station | gzip > station.tar.gz`
-  → `docker load < station.tar.gz`.
+  then `docker load < station.tar.gz`.
 
 ## Update
 ```bash
