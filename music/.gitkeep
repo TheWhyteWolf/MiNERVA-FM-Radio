@@ -1,0 +1,5 @@
+# Put your music here for `docker compose -f docker-compose.station.yml up --build`.
+# Layout: <System>/<Game>/<files>   e.g.
+#   music/SNES/Chrono Trigger/01 Title.spc
+#   music/C64/Commando/Commando.sid
+# Audio files are git-ignored, so nothing here gets committed.

@@ -15,6 +15,22 @@
 
 ---
 
+## 🚀 Quickstart (run the whole station)
+
+You need **Docker** and **your own music** (none ships — copyright).
+
+```bash
+git clone https://github.com/TheWhyteWolf/MiNERVA-FM-Radio
+cd MiNERVA-FM-Radio
+docker compose -f docker-compose.station.yml up --build
+```
+
+Put your music in `./music`, organised as **`<System>/<Game>/<files>`**
+(e.g. `music/SNES/Chrono Trigger/01 Title.spc`) — **flat files won't index.** Then open
+**http://localhost:8080/** and click **TUNE IN**. (First run builds the image, ~a few minutes.)
+
+_Prefer not to build? Use the prebuilt-image [`deploy/`](deploy/) bundle — details below._
+
 # MiNERVA-FM — Radio (broadcast edition)
 
 One shared live stream to many listeners, with the CRT visualiser front-end. Same look as the
